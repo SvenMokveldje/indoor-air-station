@@ -14,6 +14,8 @@ const SCHEMA: &str = "
     );
     ";
 
+pub type DBError = Box<dyn std::error::Error + Send + Sync>;
+
 #[derive(Debug, Clone)]
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -33,7 +35,7 @@ impl Database {
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
     }
 
-    pub async fn insert_reading(&self, r: &Reading) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn insert_reading(&self, r: &Reading) -> Result<(), DBError> {
         let now: String = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let reading = r.clone();
         
@@ -45,13 +47,13 @@ impl Database {
                VALUES (?, ?, ?, ?, ?, ?)",
                params![reading.seq, reading.temperature_c, reading.humidity_pct, reading.pressure_hpa, reading.co2_ppm, now],
             )?;
-            Ok::<(), rusqlite::Error>(())
+            Ok::<(), DBError>(())
         })
         .await??;
         Ok(())
     }
 
-    pub async fn get_reading(&self, seq: u32) -> Result<Option<Reading>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_reading(&self, seq: u32) -> Result<Option<Reading>, DBError> {
         let conn = Arc::clone(&self.conn);
         let result: Option<Reading> = tokio::task::spawn_blocking(move || {
             let conn = conn.lock().expect("mutex poisoned");
