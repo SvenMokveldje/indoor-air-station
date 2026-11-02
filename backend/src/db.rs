@@ -1,7 +1,11 @@
-use std::{io::Read, path::Path, sync::{Arc, Mutex}};
-use rusqlite::{Connection, params, OptionalExtension};
-use shared::Reading;
 use chrono::Utc;
+use rusqlite::{Connection, OptionalExtension, params};
+use shared::Reading;
+use std::{
+    io::Read,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 const SCHEMA: &str = "
     CREATE TABLE IF NOT EXISTS readings (
@@ -23,7 +27,7 @@ pub struct Database {
 
 impl Database {
     pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Self> {
-       Self::from_connection(Connection::open(path)?) 
+        Self::from_connection(Connection::open(path)?)
     }
 
     pub fn open_from_memory() -> rusqlite::Result<Self> {
@@ -32,13 +36,15 @@ impl Database {
 
     fn from_connection(conn: Connection) -> rusqlite::Result<Self> {
         conn.execute_batch(SCHEMA)?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 
     pub async fn insert_reading(&self, r: &Reading) -> Result<(), DBError> {
         let now: String = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let reading = r.clone();
-        
+
         let conn = Arc::clone(&self.conn);
         tokio::task::spawn_blocking(move || {
             let conn = conn.lock().expect("mutex poisoned");
@@ -57,18 +63,15 @@ impl Database {
         let conn = Arc::clone(&self.conn);
         let result: Option<Reading> = tokio::task::spawn_blocking(move || {
             let conn = conn.lock().expect("mutex poisoned");
-            conn.query_row("SELECT * FROM readings WHERE seq = ?", 
-                [seq],
-                |row| {
-                    Ok(Reading {
-                        seq: row.get(0)?,
-                        temperature_c: row.get(1)?,
-                        humidity_pct: row.get(2)?,
-                        pressure_hpa: row.get(3)?,
-                        co2_ppm: row.get(4)?,
-                    })
-                }
-            )
+            conn.query_row("SELECT * FROM readings WHERE seq = ?", [seq], |row| {
+                Ok(Reading {
+                    seq: row.get(0)?,
+                    temperature_c: row.get(1)?,
+                    humidity_pct: row.get(2)?,
+                    pressure_hpa: row.get(3)?,
+                    co2_ppm: row.get(4)?,
+                })
+            })
             .optional()
         })
         .await??;
@@ -82,8 +85,8 @@ mod tests {
 
     fn new_database() -> Database {
         Database::open_from_memory().expect("in memory db")
-    } 
-    
+    }
+
     #[tokio::test]
     async fn insert_items_can_be_read_back() {
         let db = new_database();

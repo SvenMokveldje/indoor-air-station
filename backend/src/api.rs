@@ -1,4 +1,10 @@
-use axum::{Json, Router, extract::{Path, State}, http::StatusCode, response::{IntoResponse, Response}, routing::get};
+use axum::{
+    Json, Router,
+    extract::{Path, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::get,
+};
 use serde_json::json;
 use shared::Reading;
 
@@ -6,7 +12,7 @@ use crate::db::{DBError, Database};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: Database
+    pub db: Database,
 }
 
 #[derive(Debug)]
@@ -24,15 +30,18 @@ impl From<DBError> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-       let (status, message) = match self {
-           ApiError::NotFound => (StatusCode::NOT_FOUND, "not found".to_string()),
-           ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
-           ApiError::Internal(details) => {
-               eprintln!("internal error: {details}");
-               (StatusCode::INTERNAL_SERVER_ERROR, "internal server error".to_string())
-           }
-       }; 
-       (status, Json(json!({"error": message}))).into_response()
+        let (status, message) = match self {
+            ApiError::NotFound => (StatusCode::NOT_FOUND, "not found".to_string()),
+            ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            ApiError::Internal(details) => {
+                eprintln!("internal error: {details}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error".to_string(),
+                )
+            }
+        };
+        (status, Json(json!({"error": message}))).into_response()
     }
 }
 
@@ -45,16 +54,18 @@ async fn get_reading(
 }
 
 pub fn reading_routes() -> Router<AppState> {
-    Router::new()
-        .route("/readings/{id}", get(get_reading))
+    Router::new().route("/readings/{id}", get(get_reading))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::{Body, to_bytes}, http::Request};
-use tower::ServiceExt;
-    
+    use axum::{
+        body::{Body, to_bytes},
+        http::Request,
+    };
+    use tower::ServiceExt;
+
     async fn body_json(response: Response) -> serde_json::Value {
         let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         serde_json::from_slice(&bytes).unwrap()
@@ -82,7 +93,7 @@ use tower::ServiceExt;
             pressure_hpa: 1013.0,
             co2_ppm: Some(400),
         };
-    
+
         db.insert_reading(&reading).await.unwrap();
         Ok(id)
     }
@@ -107,7 +118,10 @@ use tower::ServiceExt;
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
         let json = body_json(response).await;
         let body = json.to_string();
-        assert!(!body.contains("secret_stuff"), "internal details leaked: {body}");
+        assert!(
+            !body.contains("secret_stuff"),
+            "internal details leaked: {body}"
+        );
         assert_eq!(json["error"], "internal server error")
     }
 
@@ -116,7 +130,7 @@ use tower::ServiceExt;
         let db = new_database();
         let id = insert_reading(&db).await.unwrap();
         let app = test_app(db);
-        
+
         let response = app.oneshot(get(&format!("/readings/{id}"))).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);

@@ -9,4 +9,3 @@ pub struct Reading {
     pub pressure_hpa: f32,
     pub co2_ppm: Option<u16>,
 }
-

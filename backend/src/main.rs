@@ -1,6 +1,6 @@
+mod api;
 mod config;
 mod db;
-mod api;
 use axum::Router;
 use config::Config;
 use db::Database;
@@ -23,17 +23,15 @@ async fn main() {
 
     let app = init_routers(db);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.expect("failed to bind adress");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080")
+        .await
+        .expect("failed to bind adress");
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
 
 fn init_routers(db: Database) -> Router {
-    let state = AppState {
-        db,
-    };
-    
-    Router::new()
-        .merge(api::reading_routes())
-        .with_state(state)
+    let state = AppState { db };
+
+    Router::new().merge(api::reading_routes()).with_state(state)
 }
