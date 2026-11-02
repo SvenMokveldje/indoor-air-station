@@ -10,10 +10,10 @@
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
 use esp_hal::clock::CpuClock;
-use esp_hal::i2c;
-use esp_hal::timer::timg::TimerGroup;
 use esp_hal::i2c::master::{Config, I2c};
 use esp_hal::time::Rate;
+use esp_hal::timer::timg::TimerGroup;
+use firmware::am2320::{Am2320};
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -48,47 +48,19 @@ async fn main(spawner: Spawner) -> ! {
             .expect("Failed to initialize Wi-Fi controller");
     let _wifi_interface = esp_radio::wifi::Interface::station();
 
-    // TODO: Spawn some tasks
-    let _ = spawner;
-
-    const AM2320_ADDR: u8 = 0x5C; // 7-bit address (0xB8 >> 1)
-
     let i2c_config = Config::default().with_frequency(Rate::from_khz(100));
 
-    let mut i2c = I2c::new(
-        peripherals.I2C0,
-        i2c_config,
-    ).unwrap()
-    .with_sda(peripherals.GPIO0)
-    .with_scl(peripherals.GPIO1);
+    let i2c = I2c::new(peripherals.I2C0, i2c_config)
+        .unwrap()
+        .with_sda(peripherals.GPIO0)
+        .with_scl(peripherals.GPIO1);
+    
+    let mut am2320 = Am2320::new(i2c);
 
     loop {
-        // Wake up 
-        let _ = i2c.write(AM2320_ADDR, &[]);
+        let measurement = am2320.read().await;
+        esp_println::println!("{:?}", measurement);
         
-        Timer::after(Duration::from_millis(1)).await;
-
-        if let Err(e) = i2c.write(AM2320_ADDR, &[0x03, 0x00, 0x04]) {
-            esp_println::println!("Command Error: {:?}", e);
-        }
-
-        Timer::after(Duration::from_millis(2)).await;
-        
-        let mut buf = [0u8; 8];
-        if let Err(e) = i2c.read(AM2320_ADDR, &mut buf) {
-            esp_println::println!("Read Error: {:?}", e);
-        }
-
-        let hum_high = buf[2] as u16;
-        let hum_low = buf[3] as u16;
-
-        let temp_high = buf[4] as u16;
-        let temp_low = buf[5] as u16;
-
-        let hum = ((hum_high * 256 + hum_low) as f32)/10.0;
-        let temp = ((temp_high * 256 + temp_low) as f32)/10.0;
-        
-        esp_println::println!("hum: {}, temp: {}", hum, temp);
 
         Timer::after(Duration::from_millis(3000)).await;
     }
