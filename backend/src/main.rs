@@ -29,8 +29,8 @@ async fn main() {
     let mut mqtt_options = MqttOptions::new(&config.mqtt_device_name, &config.mqtt_host, 1883);
     mqtt_options.set_keep_alive(Duration::from_secs(5));
 
-    let (client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
-    let mqtt_client = ingest::MQTTClient::new(client, eventloop);
+    let (client, eventloop) = AsyncClient::new(mqtt_options, 10);
+    let mqtt_client = ingest::MQTTClient::new(client, eventloop, db.clone());
     mqtt_client.spawn();
     
     let app = init_routers(db);
