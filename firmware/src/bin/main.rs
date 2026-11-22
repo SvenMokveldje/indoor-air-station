@@ -7,8 +7,12 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
+use core::net::Ipv4Addr;
+use core::num::NonZero;
+
 use embassy_executor::Spawner;
-use embassy_net::{Runner, StackResources};
+use embassy_net::tcp::TcpSocket;
+use embassy_net::{Runner, StackResources, Stack};
 use embassy_time::{Duration, Timer};
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c::master::{Config, I2c};
@@ -19,7 +23,9 @@ use esp_radio::wifi::sta::StationConfig;
 use esp_radio::wifi::{
     AuthenticationMethodConfig, Config as WifiConfig, Interface, Password, Ssid, WifiController,
 };
-use firmware::am2320::Am2320;
+use firmware::am2320::{self, Am2320};
+use shared::Reading;
+
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -28,6 +34,12 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 
 extern crate alloc;
 use esp_alloc as _;
+use rust_mqtt::Bytes;
+use rust_mqtt::buffer::BumpBuffer;
+use rust_mqtt::client::Client;
+use rust_mqtt::client::options::{ConnectOptions, PublicationOptions, TopicReference};
+use rust_mqtt::config::KeepAlive;
+use rust_mqtt::types::{MqttString, TopicName};
 use static_cell::StaticCell;
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
@@ -60,7 +72,7 @@ async fn main(spawner: Spawner) -> ! {
 
     const SSID: &str = env!("SSID");
     const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
-
+    
     let ssid: Ssid = SSID.try_into().expect("SSID longer than 32 bytes");
     let password: Password = WIFI_PASSWORD
         .try_into()
@@ -95,12 +107,96 @@ async fn main(spawner: Spawner) -> ! {
         .with_sda(peripherals.GPIO0)
         .with_scl(peripherals.GPIO1);
 
-    let mut am2320 = Am2320::new(i2c);
+    let am2320 = Am2320::new(i2c);
+
+    spawner.spawn(read_sensor(stack, am2320).expect("Failed to spawn read_sensor task"));
 
     loop {
-        let measurement = am2320.read().await;
-        esp_println::println!("{:?}", measurement);
+        embassy_time::Timer::after(embassy_time::Duration::from_secs(60)).await;
+    }
+}
 
+#[embassy_executor::task]
+pub async fn read_sensor(stack: Stack<'static>, mut am2320: Am2320<'static>) {
+    const BROKER_IP: &str = env!("BROKER_IP");
+    let adress: Ipv4Addr = BROKER_IP.parse().expect("BROKER_IP is not a vlid ipv4");
+    const BROKER_PORT: u16 = 1883;
+
+    let mut rx_buffer = [0; 4096];
+    let mut tx_buffer = [0; 4096];
+
+    let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+    socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
+
+    let remote_endpoint = (adress, BROKER_PORT);
+    esp_println::println!("Connecting to broker and port at {}:{}", BROKER_IP, BROKER_PORT);
+    let connection = socket.connect(remote_endpoint).await;
+    if let Err(e) = connection {
+        esp_println::println!("Failed to connect to broker: {:?}", e);
+        return;
+    }
+    esp_println::println!("Connected to broker");
+
+    let mut mqtt_buffer_storage = [0; 1024];
+    let mut mqtt_buffer = BumpBuffer::new(&mut mqtt_buffer_storage);
+    let mut client = Client::<_, _, 1, 1, 1, 1, 1, 0, 0>::new(&mut mqtt_buffer);
+    let connect_options = ConnectOptions::new()
+        .clean_start()
+        .keep_alive(KeepAlive::Seconds(
+            NonZero::new(60).expect("non-zero keep alive"),
+        ));
+    let client_id = MqttString::from_str("esp32c3").expect("valid MQTT client id");
+    
+    if let Err(e) = client
+        .connect(socket, &connect_options, Some(client_id))
+        .await
+    {
+        esp_println::println!("MQTT connect error: {:?}", e);
+        return;
+    }
+
+    let topic = TopicName::new(
+        MqttString::from_str("weather/reading").expect("valid MQTT topic string"),
+    )
+    .expect("valid MQTT topic name");
+    let publish_options = PublicationOptions::new(TopicReference::Name(topic)).retain();
+    
+    
+    loop {
+        if !stack.is_link_up() || !stack.is_config_up() {
+            esp_println::println!("failed to connect to network");
+            break;
+        }
+        
+        let measurement = match am2320.read().await {
+            Ok(m) => m,
+            Err(e) => {
+                esp_println::println!("AM2320 read error: {:?}", e);
+                continue;
+            }
+        };
+
+        let reading: Reading = Reading {
+            seq: 1,
+            temperature_c: measurement.temperature_x10 as f32 / 10.0,
+            humidity_pct: measurement.humidity_x10 as f32 / 10.0,
+            pressure_hpa: None,
+            co2_ppm: None,
+        };
+        
+        esp_println::println!("{:?}", reading);
+
+        let payload = match reading.to_json() {
+            Ok(p) => p,
+            Err(e) => {
+                esp_println::println!("JSON serialization error: {:?}", e);
+                continue;
+            }
+        };
+        
+        if let Err(e) = client.publish(&publish_options, payload.as_slice().into()).await {
+            esp_println::println!("MQTT publish error: {:?}", e);
+        }
         Timer::after(Duration::from_millis(3000)).await;
     }
 }

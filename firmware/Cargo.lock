@@ -1049,6 +1049,7 @@ dependencies = [
  "esp-radio",
  "esp-rtos",
  "rust-mqtt",
+ "shared",
  "smoltcp 0.14.0",
  "static_cell",
 ]
@@ -1160,6 +1161,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
 dependencies = [
  "hash32",
+ "serde_core",
  "stable_deref_trait",
 ]
 
@@ -1594,6 +1596,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-json-core"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d51e6795fbc00a1b26d78c7a0dbda143215d9dd0ee27c8a63ae0e1ccd6b83706"
+dependencies = [
+ "heapless 0.9.3",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1644,6 +1657,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "shared"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde-json-core",
 ]
 
 [[package]]
