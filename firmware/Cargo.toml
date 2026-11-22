@@ -54,6 +54,7 @@ smoltcp = { version = "0.14.0", default-features = false, features = [
 critical-section = "1.2.0"
 static_cell      = "2.1.1"
 esp-println = { version = "0.18.0", features = ["esp32c3"] }
+rust-mqtt = "0.6.0"
 
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
@@ -67,3 +68,6 @@ codegen-units = 1     # LLVM can perform better optimizations using a single thr
 debug         = 2     # prefer slower builds but better debugging experience
 lto           = 'fat'
 opt-level     = 's'
+
+[profile.dev.package.esp-radio]
+opt-level = 3

@@ -7,7 +7,7 @@ pub struct Reading {
     pub seq: u32,
     pub temperature_c: f32,
     pub humidity_pct: f32,
-    pub pressure_hpa: f32,
+    pub pressure_hpa: Option<f32>,
     pub co2_ppm: Option<u16>,
 }
 
@@ -37,7 +37,7 @@ mod tests {
             seq: 1,
             temperature_c: 25.0,
             humidity_pct: 50.0,
-            pressure_hpa: 1013.0,
+            pressure_hpa: Some(1013.0),
             co2_ppm: None,
         };
 
@@ -55,7 +55,7 @@ mod tests {
             seq: 42,
             temperature_c: 21.4,
             humidity_pct: 45.2,
-            pressure_hpa: 1013.2,
+            pressure_hpa: Some(1013.2),
             co2_ppm: Some(415),
         };
 
