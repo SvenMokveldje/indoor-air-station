@@ -5,3 +5,4 @@ version.workspace = true
 
 [dependencies]
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
+serde-json-core = "0.7.0"
