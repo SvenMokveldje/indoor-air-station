@@ -2,7 +2,6 @@ use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
 use shared::Reading;
 use std::{
-    io::Read,
     path::Path,
     sync::{Arc, Mutex},
 };

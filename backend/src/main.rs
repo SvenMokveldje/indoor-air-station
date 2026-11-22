@@ -7,8 +7,7 @@ use std::time::Duration;
 use axum::Router;
 use config::Config;
 use db::Database;
-use rumqttc::{AsyncClient, MqttOptions, QoS};
-use tokio::{task, time};
+use rumqttc::{AsyncClient, MqttOptions};
 
 use crate::api::AppState;
 
@@ -32,7 +31,7 @@ async fn main() {
     let (client, eventloop) = AsyncClient::new(mqtt_options, 10);
     let mqtt_client = ingest::MQTTClient::new(client, eventloop, db.clone());
     mqtt_client.spawn();
-    
+
     let app = init_routers(db);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080")
